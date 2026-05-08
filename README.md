@@ -1,3 +1,5 @@
+[中文](README_CN.md) | English
+
 # Clipboard Forward Center
 
 A lightweight MQTT-based clipboard message forwarding service written in Go. It synchronizes clipboard content between devices with dedup filtering and provides an HTTP API for message storage.
@@ -138,4 +140,4 @@ Pushing a tag (`v*`) triggers GitHub Actions to build binaries for Linux (amd64/
 
 ## License
 
-MIT
+Apache 2.0

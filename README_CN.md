@@ -1,3 +1,5 @@
+中文 | [English](README.md)
+
 # Clipboard Forward Center
 
 一个基于 MQTT 的轻量级剪贴板消息转发服务，使用 Go 编写。支持设备间剪贴板内容同步、去重过滤，并提供 HTTP API 进行消息存储。
@@ -138,4 +140,4 @@ Authorization: Bearer <token>
 
 ## 许可证
 
-MIT
+Apache 2.0
