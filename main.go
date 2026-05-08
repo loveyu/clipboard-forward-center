@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"clipboard-forward-center/internal/config"
@@ -20,6 +22,8 @@ import (
 var version = "dev"
 
 func main() {
+	loadEnv(".env")
+
 	if len(os.Args) < 2 {
 		os.Args = append(os.Args, "start")
 	}
@@ -28,10 +32,13 @@ func main() {
 	case "start":
 		runStart()
 	case "help":
+	case "--help":
 		runHelp()
 	case "download-config":
 		runDownloadConfig()
 	case "version":
+	case "--version":
+	case "-v":
 		fmt.Println("clipboard-forward-center", version)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\nUse 'help' for usage.\n", os.Args[1])
@@ -133,4 +140,34 @@ func runDownloadConfig() {
 	}
 
 	log.Printf("config saved to %s (%d bytes)", cfgPath, len(data))
+}
+
+// loadEnv reads KEY=VALUE pairs from a .env file. Existing env vars are not overwritten.
+// Lines starting with # and empty lines are skipped.
+func loadEnv(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return // .env file is optional
+	}
+	defer f.Close()
+
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		line := strings.TrimSpace(s.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if os.Getenv(key) != "" {
+			continue
+		}
+		os.Setenv(key, value)
+	}
 }
