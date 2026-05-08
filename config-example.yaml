@@ -10,6 +10,8 @@
 #   keepAliveInterval     - Keep-alive interval in seconds (default: 20)
 #   automaticReconnect    - Enable auto-reconnect (default: true)
 #   reconnectMaxInterval  - Max reconnect backoff in seconds (default: 60)
+#   qos                   - Default QoS for subscribe & publish (0/1/2, default: 0)
+#   retain                - Default retain flag for publish (true/false, default: false)
 dsn: mqtt://your_user:your_password@127.0.0.1:1883?connectTimeout=3&keepAliveInterval=20&automaticReconnect=true&reconnectMaxInterval=60&clientId=clipboard-forward-center
 
 # Example with TLS:
@@ -53,6 +55,8 @@ clients:
 #   type         - Content type identifier (used for dedup hash computation).
 #   format       - Payload format: "json" or "yaml". Used to parse contentField.
 #   contentField - Field name in the payload for dedup content extraction.
+#   qos          - Override default QoS for this rule (0/1/2). Optional.
+#   retain       - Override default retain flag for this rule (true/false). Optional.
 #
 # Example payload (JSON):
 #   {"content": "hello world", "timestamp": 1234567890}
@@ -87,6 +91,8 @@ forward:
   #   type: text
   #   format: json
   #   contentField: content
+  #   qos: 1         # Override: use QoS 1 for this rule
+  #   retain: true   # Override: retain messages for this rule
 
   # --- Example: many-to-one aggregation ---
   # Multiple sources forwarding to a single target:

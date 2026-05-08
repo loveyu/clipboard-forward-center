@@ -76,7 +76,7 @@ func (e *Engine) HandleMessage(topic string, payload []byte) {
 			if e.pub == nil {
 				continue
 			}
-			if err := e.pub.Publish(to, 0, false, payload); err != nil {
+			if err := e.pub.Publish(to, rule.QoSValue(e.cfg.DefaultQoS()), rule.RetainValue(e.cfg.DefaultRetain()), payload); err != nil {
 				log.Printf("forward: publish to %s: %v", to, err)
 				continue
 			}

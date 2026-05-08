@@ -85,7 +85,7 @@ func (c *Client) subscribeAll() {
 	for i := range c.cfg.Forward {
 		rule := &c.cfg.Forward[i]
 		for _, topic := range rule.From {
-			t := c.client.Subscribe(topic, 0, func(_ mqtt.Client, msg mqtt.Message) {
+			t := c.client.Subscribe(topic, c.cfg.DefaultQoS(), func(_ mqtt.Client, msg mqtt.Message) {
 				if c.debug {
 					log.Printf("mqtt: recv %s (%d bytes)", msg.Topic(), len(msg.Payload()))
 				}

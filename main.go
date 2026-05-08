@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"clipboard-forward-center/internal/config"
 	"clipboard-forward-center/internal/filter"
@@ -31,6 +32,8 @@ func main() {
 	switch os.Args[1] {
 	case "start":
 		runStart()
+	case "check":
+		runCheck()
 	case "help":
 	case "--help":
 		runHelp()
@@ -43,6 +46,57 @@ func main() {
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\nUse 'help' for usage.\n", os.Args[1])
 		os.Exit(1)
+	}
+}
+
+func runCheck() {
+	var maxTime time.Duration
+	args := os.Args[2:]
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--max-time" && i+1 < len(args) {
+			d, err := time.ParseDuration(args[i+1])
+			if err != nil {
+				log.Fatalf("invalid --max-time: %v", err)
+			}
+			maxTime = d
+			i++
+		}
+	}
+
+	cfgPath := config.ConfigPath()
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		log.Fatalf("load config: %v", err)
+	}
+
+	opts, err := cfg.MQTTOptions()
+	if err != nil {
+		log.Fatalf("parse DSN: %v", err)
+	}
+	log.Printf("checking MQTT broker: %s", opts.Broker)
+
+	deadline := time.Now().Add(maxTime)
+	if maxTime == 0 {
+		deadline = time.Now()
+	}
+
+	for attempt := 1; ; attempt++ {
+		mqttClient := mqttclient.New(cfg, nil, false)
+		err := mqttClient.Connect()
+		if err == nil {
+			log.Printf("MQTT broker is available (attempt %d)", attempt)
+			mqttClient.Disconnect()
+			os.Exit(0)
+		}
+
+		log.Printf("attempt %d: connect failed: %v", attempt, err)
+
+		if maxTime == 0 || time.Now().After(deadline) {
+			fmt.Fprintln(os.Stderr, "MQTT broker is not available")
+			os.Exit(1)
+		}
+
+		time.Sleep(2 * time.Second)
 	}
 }
 
@@ -95,9 +149,14 @@ Usage:
 
 Commands:
   start            Start the service (default)
+  check            Check MQTT broker connectivity (exit 0 on success, 1 on failure)
   help             Show this help message
   download-config  Download remote config from REMOTE_CONFIG_URL
   version          Show version
+
+Check Options:
+  --max-time <duration>  Maximum time to keep retrying (e.g. 30s, 1m).
+                         Default: single attempt, no retry.
 
 Environment Variables:
   DEBUG             Enable debug logging

@@ -43,6 +43,8 @@ type ForwardRule struct {
 	Type         string   `yaml:"type"`
 	Format       string   `yaml:"format"`
 	ContentField string   `yaml:"contentField"`
+	QoS          *int     `yaml:"qos"`
+	Retain       *bool    `yaml:"retain"`
 }
 
 type MQTTOptions struct {
@@ -55,6 +57,13 @@ type MQTTOptions struct {
 	AutoReconnect        bool
 	MaxReconnectInterval time.Duration
 	UseTLS               bool
+	QoS                  byte
+	Retain               bool
+}
+
+var dsnCache struct {
+	dsn  string
+	opts *MQTTOptions
 }
 
 func Load(path string) (*Config, error) {
@@ -91,6 +100,43 @@ func (c *Config) FilterDuration() time.Duration {
 	return d
 }
 
+func (c *Config) DefaultQoS() byte {
+	opts, err := c.MQTTOptions()
+	if err != nil {
+		return 0
+	}
+	return opts.QoS
+}
+
+func (c *Config) DefaultRetain() bool {
+	opts, err := c.MQTTOptions()
+	if err != nil {
+		return false
+	}
+	return opts.Retain
+}
+
+func (r *ForwardRule) QoSValue(defaultQoS byte) byte {
+	if r.QoS != nil {
+		q := *r.QoS
+		if q < 0 {
+			return 0
+		}
+		if q > 2 {
+			return 2
+		}
+		return byte(q)
+	}
+	return defaultQoS
+}
+
+func (r *ForwardRule) RetainValue(defaultRetain bool) bool {
+	if r.Retain != nil {
+		return *r.Retain
+	}
+	return defaultRetain
+}
+
 func (c *Config) StorageExpire() time.Duration {
 	d, err := time.ParseDuration(c.Storage.Expire)
 	if err != nil {
@@ -100,6 +146,10 @@ func (c *Config) StorageExpire() time.Duration {
 }
 
 func (c *Config) MQTTOptions() (*MQTTOptions, error) {
+	if dsnCache.dsn == c.DSN && dsnCache.opts != nil {
+		return dsnCache.opts, nil
+	}
+
 	u, err := url.Parse(c.DSN)
 	if err != nil {
 		return nil, fmt.Errorf("parse DSN: %w", err)
@@ -145,7 +195,23 @@ func (c *Config) MQTTOptions() (*MQTTOptions, error) {
 			opts.MaxReconnectInterval = time.Duration(n) * time.Second
 		}
 	}
+	if v := q.Get("qos"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			if n < 0 {
+				n = 0
+			}
+			if n > 2 {
+				n = 2
+			}
+			opts.QoS = byte(n)
+		}
+	}
+	if v := q.Get("retain"); v != "" {
+		opts.Retain = v == "true"
+	}
 
+	dsnCache.dsn = c.DSN
+	dsnCache.opts = opts
 	return opts, nil
 }
 
