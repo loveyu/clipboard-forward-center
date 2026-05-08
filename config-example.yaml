@@ -1,0 +1,99 @@
+# Clipboard Forward Center - Example Configuration
+# Copy this file to config.yaml and modify as needed.
+
+# MQTT broker connection string.
+# Format: mqtt://username:password@host:port?params
+# Use mqtts:// for TLS encrypted connections.
+# Supported query params:
+#   clientId              - MQTT client identifier (required for stable sessions)
+#   connectTimeout        - Connection timeout in seconds (default: 3)
+#   keepAliveInterval     - Keep-alive interval in seconds (default: 20)
+#   automaticReconnect    - Enable auto-reconnect (default: true)
+#   reconnectMaxInterval  - Max reconnect backoff in seconds (default: 60)
+dsn: mqtt://your_user:your_password@127.0.0.1:1883?connectTimeout=3&keepAliveInterval=20&automaticReconnect=true&reconnectMaxInterval=60&clientId=clipboard-forward-center
+
+# Example with TLS:
+# dsn: mqtts://your_user:your_password@mqtt.example.com:8883?clientId=clipboard-forward-center
+
+# HTTP server settings.
+http:
+  addr: ":8080"  # Listen address
+
+# Dedup filter settings.
+# When forwarding to a client, if that client recently sent or received
+# a message with the same content hash within this time window, the forward is skipped.
+# Hash = SHA256(forward.type + ":" + payload[contentField])
+# Supports: ms/s/m/h with decimals (e.g., "2.5s", "1.5m").
+filter:
+  time: 5s
+
+# In-memory message storage for HTTP API.
+storage:
+  maxRecords: 100  # Maximum stored messages. Oldest are evicted when full.
+  expire: 10m      # Message TTL. Expired messages are automatically removed.
+
+# Client credentials for HTTP API authentication.
+# Each client has a name and a secret token.
+# - PUT/POST requires the URL client name to match the Bearer token's client.
+# - GET allows any valid token to read any client's messages.
+clients:
+  - name: my-phone
+    token: "change-me-to-a-secure-random-string"
+  - name: my-laptop
+    token: "another-secure-random-string"
+  # - name: my-tablet
+  #   token: "yet-another-secure-random-string"
+
+# Forward rules define how messages are routed between MQTT topics.
+# Topic format: "type-prefix/client-name" (split by "/", last segment is client ID).
+#
+# Fields:
+#   from         - Source MQTT topics to subscribe to.
+#   to           - Target MQTT topics to publish to.
+#   type         - Content type identifier (used for dedup hash computation).
+#   format       - Payload format: "json" or "yaml". Used to parse contentField.
+#   contentField - Field name in the payload for dedup content extraction.
+#
+# Example payload (JSON):
+#   {"content": "hello world", "timestamp": 1234567890}
+# With contentField: "content", the value "hello world" is used for dedup.
+forward:
+  # --- Text clipboard: phone <-> laptop bidirectional ---
+  - from: [ "clipboard-in-text/my-phone" ]
+    to: [ "clipboard-out-text/my-laptop" ]
+    type: text
+    format: json
+    contentField: content
+
+  - from: [ "clipboard-in-text/my-laptop" ]
+    to: [ "clipboard-out-text/my-phone" ]
+    type: text
+    format: json
+    contentField: content
+
+  # --- Image clipboard: phone -> laptop ---
+  - from: [ "clipboard-in-image/my-phone" ]
+    to: [ "clipboard-out-image/my-laptop" ]
+    type: image
+    format: json
+    contentField: content
+
+  # --- Example: one-to-many forwarding ---
+  # Forward from one device to multiple targets:
+  # - from: [ "clipboard-in-text/my-phone" ]
+  #   to:
+  #     - "clipboard-out-text/my-laptop"
+  #     - "clipboard-out-text/my-tablet"
+  #   type: text
+  #   format: json
+  #   contentField: content
+
+  # --- Example: many-to-one aggregation ---
+  # Multiple sources forwarding to a single target:
+  # - from:
+  #     - "clipboard-in-text/my-phone"
+  #     - "clipboard-in-text/my-tablet"
+  #   to: [ "clipboard-out-text/my-laptop" ]
+  #   type: text
+  #   format: json
+  #   contentField: content

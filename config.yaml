@@ -1,0 +1,41 @@
+dsn: mqtt://clipboard:to1llTFXZyD2bErK@127.0.0.1:1883?connectTimeout=3&keepAliveInterval=20&automaticReconnect=true&reconnectMaxInterval=60&clientId=clipboard-forward-center
+
+http:
+  addr: ":8080"
+
+# format supports: json/yaml. contentField specifies the field for dedup filtering.
+# Topic is split by `/`: prefix is type, last segment is client ID.
+# Dedup uses hash(type + data[contentField]). When forwarding to a client,
+# if the client recently sent or received the same hash within filter.time, skip.
+filter:
+  time: 5s # supports ms/s/m/h, including decimals
+
+# HTTP message storage settings
+storage:
+  maxRecords: 100
+  expire: 10m
+
+clients:
+  - name: mobile-k50
+    token: ABCD123456
+  - name: work-min-debian
+    token: CD123456
+
+forward:
+  - from: [ "clipboard-in-text/mobile-k50" ]
+    to: [ "clipboard-out-text/work-min-debian" ]
+    type: text
+    format: json
+    contentField: content
+
+  - from: [ "clipboard-in-image/mobile-k50" ]
+    to: [ "clipboard-out-image/work-min-debian" ]
+    type: image
+    format: json
+    contentField: content
+
+  - from: [ "clipboard-in-text/work-min-debian" ]
+    to: [ "clipboard-out-text/mobile-k50" ]
+    type: text
+    format: json
+    contentField: content
