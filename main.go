@@ -54,9 +54,11 @@ func runStart() {
 	f := filter.New(cfg.FilterDuration())
 	s := store.New(cfg.Storage.MaxRecords, cfg.StorageExpire())
 
-	engine := forward.NewEngine(cfg, f, nil, debug)
-	mqttClient := mqttclient.New(cfg, engine.HandleMessage, debug)
-	engine.SetPublisher(mqttClient)
+	var engine *forward.Engine
+	mqttClient := mqttclient.New(cfg, func(topic string, payload []byte) {
+		engine.HandleMessage(topic, payload)
+	}, debug)
+	engine = forward.NewEngine(cfg, f, mqttClient, debug)
 
 	log.Println("connecting to MQTT broker...")
 	if err := mqttClient.Connect(); err != nil {

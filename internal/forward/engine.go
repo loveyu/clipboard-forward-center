@@ -32,10 +32,6 @@ func NewEngine(cfg *config.Config, f *filter.Filter, pub Publisher, debug bool) 
 	}
 }
 
-func (e *Engine) SetPublisher(pub Publisher) {
-	e.pub = pub
-}
-
 func (e *Engine) HandleMessage(topic string, payload []byte) {
 	for i := range e.cfg.Forward {
 		rule := &e.cfg.Forward[i]

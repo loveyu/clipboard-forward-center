@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,20 +23,27 @@ import (
 	"clipboard-forward-center/internal/store"
 )
 
+func mqttPort() string {
+	if p := os.Getenv("MQTT_PORT"); p != "" {
+		return p
+	}
+	return "1883"
+}
+
 func loadTestConfig(t *testing.T) *config.Config {
 	t.Helper()
 	cfg, err := config.Load("../../config-example.yaml")
 	if err != nil {
 		t.Fatalf("load config-example.yaml: %v", err)
 	}
-	cfg.DSN = "mqtt://127.0.0.1:1883?clientId=integration-test&connectTimeout=5"
+	cfg.DSN = "mqtt://127.0.0.1:" + mqttPort() + "?clientId=integration-test&connectTimeout=5"
 	return cfg
 }
 
 func newObserverClient(t *testing.T, clientID string) mqtt.Client {
 	t.Helper()
 	opts := mqtt.NewClientOptions()
-	opts.AddBroker("tcp://127.0.0.1:1883")
+	opts.AddBroker("tcp://127.0.0.1:" + mqttPort())
 	opts.SetClientID(clientID)
 	opts.SetConnectTimeout(5 * time.Second)
 	c := mqtt.NewClient(opts)
@@ -91,9 +100,11 @@ func TestForwardText(t *testing.T) {
 
 	f := filter.New(cfg.FilterDuration())
 
-	engine := forward.NewEngine(cfg, f, nil, true)
-	mc := mqttclient.New(cfg, engine.HandleMessage, true)
-	engine.SetPublisher(mc)
+	var engine *forward.Engine
+	mc := mqttclient.New(cfg, func(topic string, payload []byte) {
+		engine.HandleMessage(topic, payload)
+	}, true)
+	engine = forward.NewEngine(cfg, f, mc, true)
 
 	if err := mc.Connect(); err != nil {
 		t.Fatalf("service connect: %v", err)
@@ -146,9 +157,11 @@ func TestForwardDedup(t *testing.T) {
 	targetTopic := rule.To[0]
 
 	f := filter.New(cfg.FilterDuration())
-	engine := forward.NewEngine(cfg, f, nil, true)
-	mc := mqttclient.New(cfg, engine.HandleMessage, true)
-	engine.SetPublisher(mc)
+	var engine *forward.Engine
+	mc := mqttclient.New(cfg, func(topic string, payload []byte) {
+		engine.HandleMessage(topic, payload)
+	}, true)
+	engine = forward.NewEngine(cfg, f, mc, true)
 
 	if err := mc.Connect(); err != nil {
 		t.Fatalf("service connect: %v", err)
@@ -163,9 +176,11 @@ func TestForwardDedup(t *testing.T) {
 		rule.ContentField: "dedup-test-content",
 	})
 
+	var mu sync.Mutex
 	var received [][]byte
 	done := make(chan struct{})
 	if token := observer.Subscribe(targetTopic, 0, func(_ mqtt.Client, msg mqtt.Message) {
+		mu.Lock()
 		received = append(received, msg.Payload())
 		if len(received) >= 2 {
 			select {
@@ -173,6 +188,7 @@ func TestForwardDedup(t *testing.T) {
 			default:
 			}
 		}
+		mu.Unlock()
 	}); token.Wait() && token.Error() != nil {
 		t.Fatalf("observer subscribe: %v", token.Error())
 	}
@@ -187,10 +203,16 @@ func TestForwardDedup(t *testing.T) {
 
 	select {
 	case <-done:
-		t.Errorf("dedup failed: received %d messages, expected 1", len(received))
+		mu.Lock()
+		n := len(received)
+		mu.Unlock()
+		t.Errorf("dedup failed: received %d messages, expected 1", n)
 	case <-time.After(3 * time.Second):
-		if len(received) != 1 {
-			t.Errorf("expected exactly 1 forwarded message, got %d", len(received))
+		mu.Lock()
+		n := len(received)
+		mu.Unlock()
+		if n != 1 {
+			t.Errorf("expected exactly 1 forwarded message, got %d", n)
 		}
 	}
 }
