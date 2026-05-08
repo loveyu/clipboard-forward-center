@@ -6,7 +6,7 @@ services:
     volumes:
       - ./test/mosquitto.conf:/mosquitto/config/mosquitto.conf
     healthcheck:
-      test: ["CMD-SHELL", "mosquitto_pub -t $$health -m ok || exit 1"]
+      test: ["CMD-SHELL", "timeout 2 bash -c 'echo > /dev/tcp/localhost/1883' || exit 1"]
       interval: 3s
       timeout: 3s
       retries: 10
