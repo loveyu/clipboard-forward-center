@@ -1,12 +1,12 @@
 services:
   mqtt:
-    image: eclipse-mosquitto:2
+    image: eclipse-mosquitto:2.0.20
     ports:
       - "1883:1883"
     volumes:
       - ./test/mosquitto.conf:/mosquitto/config/mosquitto.conf
     healthcheck:
-      test: ["CMD-SHELL", "timeout 2 bash -c 'echo > /dev/tcp/localhost/1883' || exit 1"]
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/broker/bytes/received", "-C", "1", "-W", "2"]
       interval: 3s
       timeout: 3s
       retries: 10
