@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -113,7 +114,11 @@ func runStart() {
 	}
 
 	f := filter.New(cfg.FilterDuration())
-	s := store.New(cfg.Storage.MaxRecords, cfg.StorageExpire())
+	s := store.New(cfg.Storage.MaxRecords, cfg.StorageExpire(), cfg.Storage.MaxBodySize, cfg.Storage.FileStorageSize)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s.StartCleanup(ctx)
 
 	var engine *forward.Engine
 	mqttClient := mqttclient.New(cfg, func(topic string, payload []byte) {
@@ -138,6 +143,8 @@ func runStart() {
 	<-quit
 
 	log.Println("shutting down...")
+	cancel()
+	s.Close()
 	mqttClient.Disconnect()
 }
 

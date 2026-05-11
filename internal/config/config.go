@@ -28,8 +28,10 @@ type FilterConfig struct {
 }
 
 type StorageConfig struct {
-	MaxRecords int    `yaml:"maxRecords"`
-	Expire     string `yaml:"expire"`
+	MaxRecords      int    `yaml:"maxRecords"`
+	Expire          string `yaml:"expire"`
+	MaxBodySize     int64  `yaml:"maxBodySize"`
+	FileStorageSize int64  `yaml:"fileStorageSize"`
 }
 
 type Client struct {
@@ -75,8 +77,10 @@ func Load(path string) (*Config, error) {
 	cfg := &Config{
 		HTTP: HTTPConfig{Addr: ":8080"},
 		Storage: StorageConfig{
-			MaxRecords: 100,
-			Expire:     "10m",
+			MaxRecords:      100,
+			Expire:          "10m",
+			MaxBodySize:     100 * 1024 * 1024,
+			FileStorageSize: 20 * 1024 * 1024,
 		},
 		Filter: FilterConfig{Time: "5s"},
 	}
@@ -87,6 +91,16 @@ func Load(path string) (*Config, error) {
 
 	if cfg.DSN == "" {
 		return nil, fmt.Errorf("dsn is required")
+	}
+
+	if cfg.Storage.MaxBodySize <= 0 {
+		cfg.Storage.MaxBodySize = 100 * 1024 * 1024
+	}
+	if cfg.Storage.FileStorageSize <= 0 {
+		cfg.Storage.FileStorageSize = 20 * 1024 * 1024
+	}
+	if cfg.Storage.FileStorageSize > cfg.Storage.MaxBodySize {
+		cfg.Storage.FileStorageSize = cfg.Storage.MaxBodySize
 	}
 
 	return cfg, nil

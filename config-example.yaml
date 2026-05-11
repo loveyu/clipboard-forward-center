@@ -31,8 +31,10 @@ filter:
 
 # In-memory message storage for HTTP API.
 storage:
-  maxRecords: 100  # Maximum stored messages. Oldest are evicted when full.
-  expire: 10m      # Message TTL. Expired messages are automatically removed.
+  maxRecords: 100      # Maximum stored messages. Oldest are evicted when full.
+  expire: 10m          # Message TTL. Expired messages are automatically removed.
+  maxBodySize: 104857600     # Maximum body size in bytes (default: 100MB).
+  fileStorageSize: 20971520  # Bodies larger than this are stored on disk (default: 20MB). Must not exceed maxBodySize.
 
 # Client credentials for HTTP API authentication.
 # Each client has a name and a secret token.

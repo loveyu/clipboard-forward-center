@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,19 +18,39 @@ func testConfig() *config.Config {
 			{Name: "mobile-k50", Token: "TOKEN-A"},
 			{Name: "work-debian", Token: "TOKEN-B"},
 		},
+		Storage: config.StorageConfig{
+			MaxBodySize:     100 * 1024 * 1024,
+			FileStorageSize: 20 * 1024 * 1024,
+		},
 	}
 }
 
+func newTestStore() *store.Store {
+	return store.New(100, 10*time.Minute, 100*1024*1024, 20*1024*1024)
+}
+
 func TestPutAndGet(t *testing.T) {
-	s := store.New(100, 10*time.Minute)
+	s := newTestStore()
 	srv := New(testConfig(), s)
 
 	req := httptest.NewRequest(http.MethodPut, "/client/mobile-k50/msg1", bytes.NewReader([]byte("hello")))
 	req.Header.Set("Authorization", "Bearer TOKEN-A")
 	w := httptest.NewRecorder()
 	srv.handleClient(w, req)
-	if w.Code != http.StatusNoContent {
-		t.Errorf("PUT status = %d, want %d", w.Code, http.StatusNoContent)
+	if w.Code != http.StatusOK {
+		t.Errorf("PUT status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	// Verify JSON response
+	var resp putResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode PUT response: %v", err)
+	}
+	if resp.Length != 5 {
+		t.Errorf("length = %d, want 5", resp.Length)
+	}
+	if resp.SHA256 == "" {
+		t.Error("sha256 empty")
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/client/mobile-k50/msg1", nil)
@@ -44,8 +65,27 @@ func TestPutAndGet(t *testing.T) {
 	}
 }
 
+func TestQueryTokenAuth(t *testing.T) {
+	s := newTestStore()
+	srv := New(testConfig(), s)
+
+	req := httptest.NewRequest(http.MethodPut, "/client/mobile-k50/msg1?token=TOKEN-A", bytes.NewReader([]byte("hello")))
+	w := httptest.NewRecorder()
+	srv.handleClient(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("PUT with query token: status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/client/mobile-k50/msg1?token=TOKEN-B", nil)
+	w = httptest.NewRecorder()
+	srv.handleClient(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("GET with query token: status = %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
 func TestContentTypePreserved(t *testing.T) {
-	s := store.New(100, 10*time.Minute)
+	s := newTestStore()
 	srv := New(testConfig(), s)
 
 	req := httptest.NewRequest(http.MethodPut, "/client/mobile-k50/img1", bytes.NewReader([]byte("imagedata")))
@@ -64,7 +104,7 @@ func TestContentTypePreserved(t *testing.T) {
 }
 
 func TestDefaultContentType(t *testing.T) {
-	s := store.New(100, 10*time.Minute)
+	s := newTestStore()
 	srv := New(testConfig(), s)
 
 	req := httptest.NewRequest(http.MethodPut, "/client/mobile-k50/msg1", bytes.NewReader([]byte("data")))
@@ -81,8 +121,49 @@ func TestDefaultContentType(t *testing.T) {
 	}
 }
 
+func TestExtraHeadersRoundTrip(t *testing.T) {
+	s := newTestStore()
+	srv := New(testConfig(), s)
+
+	req := httptest.NewRequest(http.MethodPut, "/client/mobile-k50/msg1", bytes.NewReader([]byte("data")))
+	req.Header.Set("Authorization", "Bearer TOKEN-A")
+	req.Header.Set("X-Extra-Source", "phone")
+	req.Header.Set("X-Extra-Tag", "clipboard")
+	w := httptest.NewRecorder()
+	srv.handleClient(w, req)
+
+	req = httptest.NewRequest(http.MethodGet, "/client/mobile-k50/msg1", nil)
+	req.Header.Set("Authorization", "Bearer TOKEN-A")
+	w = httptest.NewRecorder()
+	srv.handleClient(w, req)
+	if w.Header().Get("X-Extra-Source") != "phone" {
+		t.Errorf("X-Extra-Source = %q, want phone", w.Header().Get("X-Extra-Source"))
+	}
+	if w.Header().Get("X-Extra-Tag") != "clipboard" {
+		t.Errorf("X-Extra-Tag = %q, want clipboard", w.Header().Get("X-Extra-Tag"))
+	}
+}
+
+func TestContentLengthHeader(t *testing.T) {
+	s := newTestStore()
+	srv := New(testConfig(), s)
+
+	req := httptest.NewRequest(http.MethodPut, "/client/mobile-k50/msg1", bytes.NewReader([]byte("hello")))
+	req.Header.Set("Authorization", "Bearer TOKEN-A")
+	w := httptest.NewRecorder()
+	srv.handleClient(w, req)
+
+	req = httptest.NewRequest(http.MethodGet, "/client/mobile-k50/msg1", nil)
+	req.Header.Set("Authorization", "Bearer TOKEN-A")
+	w = httptest.NewRecorder()
+	srv.handleClient(w, req)
+	if w.Header().Get("Content-Length") != "5" {
+		t.Errorf("Content-Length = %q, want 5", w.Header().Get("Content-Length"))
+	}
+}
+
 func TestPutClientMismatch(t *testing.T) {
-	s := store.New(100, 10*time.Minute)
+	s := newTestStore()
 	srv := New(testConfig(), s)
 
 	req := httptest.NewRequest(http.MethodPut, "/client/work-debian/msg1", bytes.NewReader([]byte("data")))
@@ -95,7 +176,7 @@ func TestPutClientMismatch(t *testing.T) {
 }
 
 func TestNoAuth(t *testing.T) {
-	s := store.New(100, 10*time.Minute)
+	s := newTestStore()
 	srv := New(testConfig(), s)
 
 	req := httptest.NewRequest(http.MethodGet, "/client/mobile-k50/msg1", nil)
@@ -107,7 +188,7 @@ func TestNoAuth(t *testing.T) {
 }
 
 func TestInvalidToken(t *testing.T) {
-	s := store.New(100, 10*time.Minute)
+	s := newTestStore()
 	srv := New(testConfig(), s)
 
 	req := httptest.NewRequest(http.MethodGet, "/client/mobile-k50/msg1", nil)
@@ -120,7 +201,7 @@ func TestInvalidToken(t *testing.T) {
 }
 
 func TestGetNotFound(t *testing.T) {
-	s := store.New(100, 10*time.Minute)
+	s := newTestStore()
 	srv := New(testConfig(), s)
 
 	req := httptest.NewRequest(http.MethodGet, "/client/mobile-k50/nonexistent", nil)
@@ -133,7 +214,7 @@ func TestGetNotFound(t *testing.T) {
 }
 
 func TestGetPublicAuth(t *testing.T) {
-	s := store.New(100, 10*time.Minute)
+	s := newTestStore()
 	srv := New(testConfig(), s)
 
 	req := httptest.NewRequest(http.MethodPut, "/client/mobile-k50/msg1", bytes.NewReader([]byte("data")))
@@ -151,7 +232,7 @@ func TestGetPublicAuth(t *testing.T) {
 }
 
 func TestInvalidPath(t *testing.T) {
-	s := store.New(100, 10*time.Minute)
+	s := newTestStore()
 	srv := New(testConfig(), s)
 
 	req := httptest.NewRequest(http.MethodGet, "/client/onlyonepart", nil)
@@ -164,19 +245,38 @@ func TestInvalidPath(t *testing.T) {
 }
 
 func TestPostMethod(t *testing.T) {
-	s := store.New(100, 10*time.Minute)
+	s := newTestStore()
 	srv := New(testConfig(), s)
 
 	req := httptest.NewRequest(http.MethodPost, "/client/mobile-k50/msg1", bytes.NewReader([]byte("post-data")))
 	req.Header.Set("Authorization", "Bearer TOKEN-A")
 	w := httptest.NewRecorder()
 	srv.handleClient(w, req)
-	if w.Code != http.StatusNoContent {
-		t.Errorf("POST status = %d, want %d", w.Code, http.StatusNoContent)
+	if w.Code != http.StatusOK {
+		t.Errorf("POST status = %d, want %d", w.Code, http.StatusOK)
 	}
 
-	data, _, ok := s.Get("mobile-k50", "msg1")
-	if !ok || string(data) != "post-data" {
+	e, ok := s.Get("mobile-k50", "msg1")
+	if !ok {
+		t.Fatal("entry not found")
+	}
+	data, _ := e.ReadContent()
+	if string(data) != "post-data" {
 		t.Error("POST data mismatch")
+	}
+}
+
+func TestBodyTooLarge(t *testing.T) {
+	cfg := testConfig()
+	cfg.Storage.MaxBodySize = 5
+	s := store.New(100, 10*time.Minute, 5, 5)
+	srv := New(cfg, s)
+
+	req := httptest.NewRequest(http.MethodPut, "/client/mobile-k50/msg1", bytes.NewReader([]byte("toolarge")))
+	req.Header.Set("Authorization", "Bearer TOKEN-A")
+	w := httptest.NewRecorder()
+	srv.handleClient(w, req)
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusRequestEntityTooLarge)
 	}
 }
