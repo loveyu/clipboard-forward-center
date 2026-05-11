@@ -219,7 +219,7 @@ func TestForwardDedup(t *testing.T) {
 
 func TestHTTPAPIRoundTrip(t *testing.T) {
 	cfg := loadTestConfig(t)
-	s := store.New(cfg.Storage.MaxRecords, cfg.StorageExpire())
+	s := store.New(cfg.Storage.MaxRecords, cfg.StorageExpire(), cfg.Storage.MaxBodySize, cfg.Storage.FileStorageSize)
 	srv := httpserver.New(cfg, s)
 
 	ts := httptest.NewServer(srv.Handler())
@@ -237,8 +237,8 @@ func TestHTTPAPIRoundTrip(t *testing.T) {
 		t.Fatalf("PUT: %v", err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("PUT status = %d, want 204", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("PUT status = %d, want 200", resp.StatusCode)
 	}
 
 	// GET - should return same Content-Type
