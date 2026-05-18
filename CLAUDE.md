@@ -44,3 +44,7 @@ internal/
 
 Default path: `config.yaml` (override with `CONFIG_PATH` env).
 DSN format: `mqtt://user:pass@host:port?clientId=xxx&connectTimeout=3&keepAliveInterval=20`
+
+## Commit Conventions
+
+- Do not add `Co-Authored-By` trailer to commit messages
