@@ -7,6 +7,7 @@ A lightweight MQTT-based clipboard message forwarding service written in Go. It 
 ## Features
 
 - Forward clipboard messages between MQTT topics based on configurable rules
+- Self-forward filtering: automatically skips forwarding a message back to its source device
 - SHA256 hash-based dedup filtering with configurable time window
 - HTTP API for message storage with Bearer token authentication
 - In-memory message store with TTL and configurable capacity

@@ -66,6 +66,13 @@ func (e *Engine) HandleMessage(topic string, payload []byte) {
 				continue
 			}
 
+			if sourceClient == targetClient {
+				if e.debug {
+					log.Printf("forward: skip self-forward to %s", to)
+				}
+				continue
+			}
+
 			if !e.filter.ShouldForward(targetClient, hash) {
 				if e.debug {
 					log.Printf("forward: filter duplicate to %s (hash=%s)", targetClient, hash[:16])

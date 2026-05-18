@@ -35,6 +35,7 @@ internal/
 ## Key Design
 
 - MQTT messages are forwarded based on `forward` rules in config
+- Self-forwarding is automatically skipped: messages from a device (e.g., `clipboard-in-text/mobile-k50`) are not forwarded back to the same device (`clipboard-out-text/mobile-k50`)
 - Dedup filter uses SHA256 hash of (type + contentField) with configurable time window
 - HTTP PUT/POST requires client name to match Bearer token; GET allows any valid token
 - In-memory store with configurable max records and TTL
