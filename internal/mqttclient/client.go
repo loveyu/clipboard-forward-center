@@ -50,7 +50,12 @@ func New(cfg *config.Config, handler MessageHandler, debug bool) *Client {
 
 	mqttOpts.SetOnConnectHandler(func(_ mqtt.Client) {
 		log.Println("mqtt: connected")
-		c.subscribeAll()
+		// 仅在注册了消息处理器时订阅。check 等只探测 broker 连通性的场景
+		// 传入 nil handler，无需订阅；否则会在 OnConnect 与 Disconnect 竞态时
+		// 打出 "subscribe: not Connected" 噪音日志。
+		if c.handler != nil {
+			c.subscribeAll()
+		}
 	})
 
 	mqttOpts.SetConnectionLostHandler(func(_ mqtt.Client, err error) {

@@ -35,14 +35,11 @@ func main() {
 		runStart()
 	case "check":
 		runCheck()
-	case "help":
-	case "--help":
+	case "help", "--help":
 		runHelp()
 	case "download-config":
 		runDownloadConfig()
-	case "version":
-	case "--version":
-	case "-v":
+	case "version", "--version", "-v":
 		fmt.Println("clipboard-forward-center", version)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\nUse 'help' for usage.\n", os.Args[1])
