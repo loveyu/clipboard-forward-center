@@ -86,6 +86,15 @@ func (c *Client) subscribeAll() {
 		rule := &c.cfg.Forward[i]
 		for _, topic := range rule.From {
 			t := c.client.Subscribe(topic, c.cfg.DefaultQoS(), func(_ mqtt.Client, msg mqtt.Message) {
+				// 跳过 retained 消息：retained 是 broker 上缓存的历史快照，
+				// 会在本服务每次重连重订阅时被 EMQX 重新下发。若当新事件转发，
+				// 会导致设备每次收到重复的历史剪贴板。
+				if msg.Retained() {
+					if c.debug {
+						log.Printf("mqtt: skip retained %s", msg.Topic())
+					}
+					return
+				}
 				if c.debug {
 					log.Printf("mqtt: recv %s (%d bytes)", msg.Topic(), len(msg.Payload()))
 				}
